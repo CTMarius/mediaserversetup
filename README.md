@@ -1,6 +1,6 @@
-# Media Stack – Docker Compose
+# Media Stack – Single Container Docker Setup
 
-Automated TV/movie downloading & cross-seeding pipeline.
+Automated TV/movie downloading & cross-seeding pipeline in a single container.
 
 ```
 Sonarr/Radarr ──▶ Prowlarr (search) ──▶ qBittorrent (download)
@@ -52,32 +52,25 @@ docker --version          # e.g. Docker version 27.x
 docker compose version    # e.g. Docker Compose version v2.x
 ```
 
-## What does `docker compose up -d` actually install?
+## What does `docker compose up -d` actually do?
 
-You do **not** manually install qBittorrent, Sonarr, Radarr, Prowlarr, or Cross-seed. Docker handles everything:
+You do **not** manually install qBittorrent, Sonarr, Radarr, Prowlarr, or Cross-seed. Docker builds a custom image with everything:
 
-1. **Reads `docker-compose.yml`** — the file defines 5 services, each pointing to a pre-built Docker image
-2. **Pulls images** from container registries (first run only, cached afterward):
-   | Service | Image | Registry |
-   |---|---|---|
-   | qBittorrent | `lscr.io/linuxserver/qbittorrent:latest` | LinuxServer.io |
-   | Prowlarr | `lscr.io/linuxserver/prowlarr:latest` | LinuxServer.io |
-   | Sonarr | `lscr.io/linuxserver/sonarr:latest` | LinuxServer.io |
-   | Radarr | `lscr.io/linuxserver/radarr:latest` | LinuxServer.io |
-   | Cross-seed | `ghcr.io/cross-seed/cross-seed:latest` | GitHub Container Registry |
-3. **Creates containers** from those images — each container is an isolated environment with the application pre-installed and configured
-4. **Mounts volumes** — your host directories (`/docker/compose/*/config`, `/srv/mergerfs/rust/tor`, etc.) are mapped into the containers so data persists across restarts
-5. **Sets up networking** — Docker creates an internal network; containers talk to each other by name (e.g. Sonarr reaches qBittorrent at `http://qbittorrent:8080`)
-6. **Starts all services** in dependency order (Prowlarr + qBittorrent first, then Sonarr/Radarr, then Cross-seed)
+1. **Reads `docker-compose.yml`** — the file defines 1 service that builds from the local `Dockerfile`
+2. **Builds the image** — installs all applications (qBittorrent, Prowlarr, Sonarr, Radarr, Cross-seed) into one Ubuntu-based container
+3. **Creates the container** from the built image — an isolated environment with all applications pre-installed and configured
+4. **Mounts volumes** — your host directories (`/docker/compose/*/config`, `/srv/mergerfs/rust/tor`, etc.) are mapped into the container so data persists across restarts
+5. **Sets up networking** — exposes ports for external access
+6. **Starts the service** — supervisord launches all applications within the container
 
 ### Environment variables explained
 
-Every service uses these common environment variables:
+The service uses these environment variables:
 
 | Variable | Value | Purpose |
 |---|---|---|
-| `PUID` | `1000` | Run the app as this user ID (should match your host user — check with `id -u`) |
-| `PGID` | `1000` | Run the app as this group ID (check with `id -g`) |
+| `PUID` | `1000` | Run the apps as this user ID (should match your host user — check with `id -u`) |
+| `PGID` | `1000` | Run the apps as this group ID (check with `id -g`) |
 | `TZ` | `Europe/Bucharest` | Timezone for logs and scheduling |
 
 > **Important:** `PUID`/`PGID` must match the owner of the host directories. If your user ID is different, change these values in `docker-compose.yml`. Run `id` on the host to check.
@@ -88,7 +81,11 @@ Every service uses these common environment variables:
 |---|---|---|
 | `/srv/mergerfs/rust/tor` | `/tor` | Root data dir (downloads, media, links) |
 | `/srv/mergerfs/rust/caches/tor` | `/caches` | Cache / temp / cross-seed output |
-| `/docker/compose/<service>/config` | `/config` | Per-service persistent config |
+| `/docker/compose/qbittorrent/config` | `/config/qbittorrent` | qBittorrent persistent config |
+| `/docker/compose/prowlarr/config` | `/config/prowlarr` | Prowlarr persistent config |
+| `/docker/compose/sonarr/config` | `/config/sonarr` | Sonarr persistent config |
+| `/docker/compose/radarr/config` | `/config/radarr` | Radarr persistent config |
+| `/docker/compose/cross-seed/config` | `/config/cross-seed` | Cross-seed persistent config |
 
 Create the folder structure on the host before starting:
 
@@ -98,10 +95,10 @@ mkdir -p /srv/mergerfs/rust/caches/tor/cross-seed
 mkdir -p /docker/compose/{qbittorrent,sonarr,radarr,prowlarr,cross-seed}/config
 ```
 
-## 1. Start the stack
+## 1. Build and start the stack
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 ## 2. Configure services (order matters)
@@ -110,14 +107,14 @@ docker compose up -d
 
 1. **Downloads → Default Save Path**: `/tor/downloads`
 2. **Downloads → Keep incomplete torrents in**: `/caches/incomplete` (optional)
-3. **Downloads → Copy .torrent files to**: leave default or set to `/config/qBittorrent/BT_backup`
+3. **Downloads → Copy .torrent files to**: leave default or set to `/config/qbittorrent/BT_backup`
 4. **BitTorrent → Seeding Limits**: set per your preference
 5. Under **Web UI**, change the default password
 
 ### 2b. Prowlarr (`http://<host>:9696`)
 
 1. **Settings → Indexers**: add your trackers / indexers
-2. **Settings → Apps**: add Sonarr and Radarr as applications (use container names as hosts, e.g. `http://sonarr:8989`)
+2. **Settings → Apps**: add Sonarr and Radarr as applications (use `localhost` as host, e.g. `http://localhost:8989` for Sonarr)
 3. Note your **API Key** (Settings → General) — needed for cross-seed
 
 ### 2c. Sonarr (`http://<host>:8989`)
@@ -126,7 +123,7 @@ docker compose up -d
    - **Use Hardlinks instead of Copy**: ✅ Enabled
    - **Root Folder**: `/tor/media/tv`
 2. **Settings → Download Clients**: add qBittorrent
-   - Host: `qbittorrent`, Port: `8080`
+   - Host: `localhost`, Port: `8080`
    - Category: `tv` (so downloads go to `/tor/downloads/tv`)
    - **Remove Completed**: ❌ Disabled (keep seeding!)
 3. **Settings → Indexers**: these should auto-sync from Prowlarr
@@ -142,12 +139,12 @@ Same pattern as Sonarr but:
 
 1. Copy the sample config into the cross-seed config volume:
    ```bash
-   cp cross-seed/config.js /docker/compose/cross-seed/config/config.js
+   cp config.js /docker/compose/cross-seed/config/config.js
    ```
 2. Edit `/docker/compose/cross-seed/config/config.js`:
-   - Fill in the `torznab` array with your Prowlarr Torznab URLs + API key
+   - Fill in the `torznab` array with your Prowlarr Torznab URLs + API key (e.g., `"http://localhost:9696/1/api?apikey=YOUR_API_KEY"`)
    - Adjust `matchMode` (`"partial"` or `"safe"`) as desired
-3. Restart: `docker compose restart cross-seed`
+3. Restart: `docker compose restart media-stack`
 
 ## 3. The complete flow
 

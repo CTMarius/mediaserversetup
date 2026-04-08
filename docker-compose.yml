@@ -1,107 +1,27 @@
 version: "3.8"
 
 services:
-  # ──────────────────────────────────────────────
-  # qBittorrent – torrent client
-  # ──────────────────────────────────────────────
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
+  media-stack:
+    build: .
+    container_name: media-stack
     restart: unless-stopped
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Bucharest
-      - WEBUI_PORT=8080
     ports:
-      - "8080:8080" # WebUI
-      - "6881:6881" # BitTorrent TCP
-      - "6881:6881/udp"
+      - "8080:8080" # qBittorrent WebUI
+      - "6881:6881" # qBittorrent TCP
+      - "6881:6881/udp" # qBittorrent UDP
+      - "9696:9696" # Prowlarr
+      - "8989:8989" # Sonarr
+      - "7878:7878" # Radarr
+      - "2468:2468" # cross-seed
     volumes:
-      - /docker/compose/qbittorrent/config:/config
+      - /docker/compose/qbittorrent/config:/config/qbittorrent
+      - /docker/compose/prowlarr/config:/config/prowlarr
+      - /docker/compose/sonarr/config:/config/sonarr
+      - /docker/compose/radarr/config:/config/radarr
+      - /docker/compose/cross-seed/config:/config/cross-seed
       - /srv/mergerfs/rust/tor:/tor
       - /srv/mergerfs/rust/caches/tor:/caches
-
-  # ──────────────────────────────────────────────
-  # Prowlarr – indexer manager (feeds Sonarr/Radarr)
-  # ──────────────────────────────────────────────
-  prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
-    container_name: prowlarr
-    restart: unless-stopped
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Bucharest
-    ports:
-      - "9696:9696"
-    volumes:
-      - /docker/compose/prowlarr/config:/config
-
-  # ──────────────────────────────────────────────
-  # Sonarr – TV series management
-  # Workflow: monitor series → wait for release →
-  #   search via Prowlarr → send to qBittorrent →
-  #   hardlink/symlink organised files (no move)
-  # ──────────────────────────────────────────────
-  sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
-    restart: unless-stopped
-    depends_on:
-      - prowlarr
-      - qbittorrent
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Bucharest
-    ports:
-      - "8989:8989"
-    volumes:
-      - /docker/compose/sonarr/config:/config
-      - /srv/mergerfs/rust/tor:/tor # same mount → enables hardlinks
-      - /srv/mergerfs/rust/caches/tor:/caches
-
-  # ──────────────────────────────────────────────
-  # Radarr – movie management (same pattern as Sonarr)
-  # ──────────────────────────────────────────────
-  radarr:
-    image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
-    restart: unless-stopped
-    depends_on:
-      - prowlarr
-      - qbittorrent
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Bucharest
-    ports:
-      - "7878:7878"
-    volumes:
-      - /docker/compose/radarr/config:/config
-      - /srv/mergerfs/rust/tor:/tor
-      - /srv/mergerfs/rust/caches/tor:/caches
-
-  # ──────────────────────────────────────────────
-  # Cross-seed – scans downloaded torrents, finds
-  # matching torrents on other trackers via Prowlarr
-  # (Torznab), injects them into qBittorrent
-  # ──────────────────────────────────────────────
-  cross-seed:
-    image: ghcr.io/cross-seed/cross-seed:latest
-    container_name: cross-seed
-    restart: unless-stopped
-    depends_on:
-      - qbittorrent
-      - prowlarr
-    user: "1000:1000"
-    environment:
-      - TZ=Europe/Bucharest
-    ports:
-      - "2468:2468" # cross-seed daemon API
-    volumes:
-      - /docker/compose/cross-seed/config:/config
-      - /srv/mergerfs/rust/tor:/tor
-      - /srv/mergerfs/rust/caches/tor:/caches
-    command: daemon
