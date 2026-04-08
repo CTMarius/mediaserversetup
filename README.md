@@ -52,6 +52,71 @@ docker --version          # e.g. Docker version 27.x
 docker compose version    # e.g. Docker Compose version v2.x
 ```
 
+## Quickstart setup for new users
+
+1. Open a terminal and go to this repository folder:
+
+```bash
+cd /workspaces/forvali
+```
+
+2. Create the required host directories:
+
+```bash
+sudo mkdir -p /srv/mergerfs/rust/tor/{downloads,media/tv,media/movies,cross-seed-links}
+sudo mkdir -p /srv/mergerfs/rust/caches/tor/cross-seed
+sudo mkdir -p /docker/compose/{qbittorrent,sonarr,radarr,prowlarr,cross-seed}/config
+```
+
+3. Set the host ownership so the container user can write files:
+
+```bash
+sudo chown -R $(id -u):$(id -g) /srv/mergerfs/rust /docker/compose
+```
+
+4. Copy the sample cross-seed config into place:
+
+```bash
+cp config.js /docker/compose/cross-seed/config/config.js
+```
+
+5. If your host user has a different UID/GID than `1000`, export them before starting:
+
+```bash
+export PUID=$(id -u)
+export PGID=$(id -g)
+```
+
+6. Build and start the container stack:
+
+```bash
+docker compose up -d --build
+```
+
+7. Confirm the service is running:
+
+```bash
+docker compose ps
+```
+
+8. Open the web interfaces in your browser:
+- qBittorrent: `http://localhost:8080`
+- Sonarr: `http://localhost:8989`
+- Radarr: `http://localhost:7878`
+- Prowlarr: `http://localhost:9696`
+
+9. If you change config files later or want to restart the stack, run:
+
+```bash
+docker compose restart media-stack
+```
+
+10. To stop the service completely:
+
+```bash
+docker compose down
+```
+
 ## What does `docker compose up -d` actually do?
 
 You do **not** manually install qBittorrent, Sonarr, Radarr, Prowlarr, or Cross-seed. Docker builds a custom image with everything:
@@ -75,6 +140,19 @@ The service uses these environment variables:
 
 > **Important:** The container startup script adapts the internal app user to the supplied `PUID`/`PGID` and fixes mount ownership at startup.
 > If your host user ID is different, keep `PUID`/`PGID` in `docker-compose.yml` aligned with `id -u` / `id -g` on the host.
+
+### What the entrypoint does
+
+The container uses `entrypoint.sh` as its startup script. On each container launch it:
+
+- reads the runtime `PUID` / `PGID` values
+- creates or updates the internal `appuser` account to match those IDs
+- creates missing config and data directories under `/config`, `/tor`, and `/caches`
+- ensures those directories are owned by the configured `appuser`
+- applies the timezone from `TZ`
+- then starts `supervisord`, which runs qBittorrent, Prowlarr, Sonarr, Radarr, and Cross-seed
+
+This makes the stack easier to run on different hosts without manual UID/GID fiddling.
 
 ## Directory layout
 
