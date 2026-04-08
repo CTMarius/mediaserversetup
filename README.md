@@ -73,7 +73,8 @@ The service uses these environment variables:
 | `PGID` | `1000` | Run the apps as this group ID (check with `id -g`) |
 | `TZ` | `Europe/Bucharest` | Timezone for logs and scheduling |
 
-> **Important:** `PUID`/`PGID` must match the owner of the host directories. If your user ID is different, change these values in `docker-compose.yml`. Run `id` on the host to check.
+> **Important:** The container startup script adapts the internal app user to the supplied `PUID`/`PGID` and fixes mount ownership at startup.
+> If your host user ID is different, keep `PUID`/`PGID` in `docker-compose.yml` aligned with `id -u` / `id -g` on the host.
 
 ## Directory layout
 
@@ -93,6 +94,9 @@ Create the folder structure on the host before starting:
 mkdir -p /srv/mergerfs/rust/tor/{downloads,media/tv,media/movies,cross-seed-links}
 mkdir -p /srv/mergerfs/rust/caches/tor/cross-seed
 mkdir -p /docker/compose/{qbittorrent,sonarr,radarr,prowlarr,cross-seed}/config
+
+# Make sure the mounted directories are writable by the host UID/GID used by the container
+sudo chown -R $(id -u):$(id -g) /srv/mergerfs/rust /docker/compose
 ```
 
 ## 1. Build and start the stack
@@ -143,7 +147,9 @@ Same pattern as Sonarr but:
    ```
 2. Edit `/docker/compose/cross-seed/config/config.js`:
    - Fill in the `torznab` array with your Prowlarr Torznab URLs + API key (e.g., `"http://localhost:9696/1/api?apikey=YOUR_API_KEY"`)
-   - Adjust `matchMode` (`"partial"` or `"safe"`) as desired
+   - Ensure `qbittorrentUrl` is `http://localhost:8080`
+   - Ensure `torrentDir` is `/config/qbittorrent/BT_backup`
+   - Adjust `matchMode` (`"partial" or "safe"`) as desired
 3. Restart: `docker compose restart media-stack`
 
 ## 3. The complete flow

@@ -1,16 +1,17 @@
-// cross-seed configuration – /config/config.js inside the container
+// cross-seed sample configuration for /config/cross-seed/config.js inside the container
 // Docs: https://www.cross-seed.org/docs/basics/options
 
 module.exports = {
   // ── qBittorrent connection ────────────────────
-  qbittorrentUrl: "http://qbittorrent:8080",
+  qbittorrentUrl: "http://localhost:8080",
 
   // ── Torznab feeds (Prowlarr indexers) ─────────
   // After adding indexers in Prowlarr, grab the Torznab URLs
-  // Format: http://prowlarr:9696/1/api?apikey=YOUR_PROWLARR_API_KEY
+  // Use localhost because Prowlarr runs in the same container.
+  // Format: http://localhost:9696/1/api?apikey=YOUR_PROWLARR_API_KEY
   torznab: [
-    // "http://prowlarr:9696/1/api?apikey=PROWLARR_API_KEY",
-    // "http://prowlarr:9696/2/api?apikey=PROWLARR_API_KEY",
+    // "http://localhost:9696/1/api?apikey=PROWLARR_API_KEY",
+    // "http://localhost:9696/2/api?apikey=PROWLARR_API_KEY",
   ],
 
   // ── Paths ─────────────────────────────────────
@@ -21,7 +22,7 @@ module.exports = {
   outputDir: "/caches/cross-seed",
 
   // Folder where qBittorrent stores .torrent files (fastresume)
-  torrentDir: "/config/qBittorrent/BT_backup",
+  torrentDir: "/config/qbittorrent/BT_backup",
 
   // ── Matching behaviour ────────────────────────
   // "partial" allows data-based partial matching in addition to
