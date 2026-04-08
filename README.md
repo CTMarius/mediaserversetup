@@ -62,6 +62,8 @@ cd /workspaces/mediaserversetup
 
 2. Create the required host directories:
 
+   **Why create these manually?** These directories are mounted as Docker volumes from your host system into the container. Docker does not automatically create directories on the host; they must exist before starting the container to avoid permission issues. The container's entrypoint script creates directories inside the container, but not on the host.
+
 ```bash
 sudo mkdir -p /srv/mergerfs/rust/tor/{downloads,media/tv,media/movies,cross-seed-links}
 sudo mkdir -p /srv/mergerfs/rust/caches/tor/cross-seed
@@ -92,6 +94,17 @@ export PGID=$(id -g)
 ```bash
 docker compose up -d --build
 ```
+
+### Container Startup Process
+
+The `entrypoint.sh` script is automatically executed when the Docker container starts (defined in the Dockerfile as the CMD). It handles:
+
+- Creating the `appuser` with the specified `PUID`/`PGID`
+- Setting up necessary directories inside the container
+- Configuring permissions
+- Starting supervisord to manage all services (qBittorrent, Prowlarr, Sonarr, Radarr, cross-seed)
+
+You do not need to call `entrypoint.sh` manually.
 
 7. Confirm the service is running:
 
